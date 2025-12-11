@@ -1,18 +1,71 @@
 #!/usr/bin/env bash
 # bin/compile <build-dir> <cache-dir>
 
-echo "-----> Installing Ghostscript 9.54.0"
+set -e
+
+GS_VERSION="10.06.0"
+GS_VERSION_SHORT="10060"
 
 BUILD_DIR=$1
-PACKAGE="https://github.com/ArtifexSoftware/ghostpdl-downloads/releases/download/gs9540/ghostscript-9.54.0-linux-x86_64.tgz"
-BINARY="ghostscript-9.54.0-linux-x86_64/gs-9540-linux-x86_64"
-LOCATION="$BUILD_DIR/vendor/gs/bin"
+CACHE_DIR=$2
 
-mkdir -p $LOCATION
-curl $PACKAGE -L -s -o - | tar xzf - -C $LOCATION
-mv $LOCATION/$BINARY $LOCATION/gs
+VENDOR_DIR="$BUILD_DIR/vendor/gs"
+CACHE_FILE="$CACHE_DIR/ghostscript-$GS_VERSION.tar.gz"
+INSTALL_DIR="$VENDOR_DIR"
+
+echo "-----> Installing Ghostscript $GS_VERSION (compiling from source)"
+
+# Create directories
+mkdir -p "$CACHE_DIR"
+mkdir -p "$VENDOR_DIR/bin"
+
+# Check if we have a cached compiled binary
+if [ -f "$CACHE_DIR/gs-$GS_VERSION-compiled" ]; then
+    echo "       Using cached Ghostscript binary"
+    cp "$CACHE_DIR/gs-$GS_VERSION-compiled" "$VENDOR_DIR/bin/gs"
+else
+    echo "       Downloading source..."
+    PACKAGE_URL="https://github.com/ArtifexSoftware/ghostpdl-downloads/releases/download/gs${GS_VERSION_SHORT}/ghostscript-${GS_VERSION}.tar.gz"
+
+    # Download source if not cached
+    if [ ! -f "$CACHE_FILE" ]; then
+        curl -L -s -o "$CACHE_FILE" "$PACKAGE_URL"
+    fi
+
+    echo "       Extracting source..."
+    WORK_DIR=$(mktemp -d)
+    tar xzf "$CACHE_FILE" -C "$WORK_DIR"
+
+    cd "$WORK_DIR/ghostscript-$GS_VERSION"
+
+    echo "       Configuring..."
+    ./configure --prefix="$INSTALL_DIR" \
+        --disable-cups \
+        --disable-gtk \
+        --without-x \
+        --with-drivers=FILES \
+        CFLAGS="-O2" \
+        > /dev/null 2>&1
+
+    echo "       Compiling (this may take a few minutes)..."
+    make -j$(nproc) > /dev/null 2>&1
+
+    echo "       Installing..."
+    cp bin/gs "$VENDOR_DIR/bin/gs"
+
+    # Cache the compiled binary for future builds
+    cp "$VENDOR_DIR/bin/gs" "$CACHE_DIR/gs-$GS_VERSION-compiled"
+
+    # Cleanup
+    cd /
+    rm -rf "$WORK_DIR"
+fi
+
+chmod +x "$VENDOR_DIR/bin/gs"
 
 echo "-----> Building runtime environment for Ghostscript"
 
-mkdir -p $BUILD_DIR/.profile.d
-echo "export PATH=\"\$HOME/vendor/gs/bin:\$PATH\"" > $BUILD_DIR/.profile.d/ghostscript.sh
+mkdir -p "$BUILD_DIR/.profile.d"
+echo 'export PATH="$HOME/vendor/gs/bin:$PATH"' > "$BUILD_DIR/.profile.d/ghostscript.sh"
+
+echo "-----> Ghostscript $GS_VERSION installed successfully"

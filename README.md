@@ -1,18 +1,15 @@
 # Heroku Buildpack for Ghostscript
 
-Currently installs Ghostscript 9.54.0 on Heroku.
+Compiles and installs Ghostscript 10.06.0 on Heroku.
 
 ## Install
 
-    # Use heroku-buildpack-multi
+    # Use heroku-buildpack-ghostscript
     $ cd /path/to/your-app
-    $ heroku config:add BUILDPACK_URL=https://github.com/ddollar/heroku-buildpack-multi.git
+    $ heroku buildpacks:add https://github.com/katchmk/heroku-buildpack-ghostscript
 
-    # Create a .buildpacks file with including ghostscript
-    $ cd /path/to/your-app
-    $ cat .buildpacks
-    https://github.com/heroku/heroku-buildpack-ruby.git
-    https://github.com/bvirlet/heroku-buildpack-ghostscript.git
+## Notes
 
-    # Push changes to deploy
-    $ git push
+- The first build will compile Ghostscript from source, which takes a few minutes
+- Subsequent builds use a cached binary for faster deployment
+- Ghostscript is installed to `$HOME/vendor/gs/bin/gs`
